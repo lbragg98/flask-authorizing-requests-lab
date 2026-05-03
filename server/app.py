@@ -20,6 +20,12 @@ api = Api(app)
 
 class ClearSession(Resource):
 
+    def get(self):
+        session['page_views'] = None
+        session['user_id'] = None
+
+        return {}, 204
+
     def delete(self):
     
         session['page_views'] = None
@@ -38,6 +44,9 @@ class ShowArticle(Resource):
     def get(self, id):
 
         article = Article.query.filter(Article.id == id).first()
+        if not article:
+            return {'error': 'Article not found'}, 404
+
         article_json = ArticleSchema().dump(article)
 
         if not session.get('user_id'):
@@ -47,7 +56,7 @@ class ShowArticle(Resource):
             if session['page_views'] <= 3:
                 return article_json, 200
 
-            return {'message': 'Maximum pageview limit reached'}, 401
+            return {'error': 'Maximum pageview limit reached'}, 401
 
         return article_json, 200
 
@@ -77,7 +86,7 @@ class CheckSession(Resource):
 
     def get(self):
         
-        user_id = session['user_id']
+        user_id = session.get('user_id')
         if user_id:
             user = User.query.filter(User.id == user_id).first()
             return UserSchema().dump(user), 200
@@ -87,12 +96,24 @@ class CheckSession(Resource):
 class MemberOnlyIndex(Resource):
     
     def get(self):
-        pass
+        if not session.get('user_id'):
+            return {'error': 'Unauthorized'}, 401
+
+        articles = Article.query.filter(Article.is_member_only == True).all()
+        return [ArticleSchema().dump(article) for article in articles], 200
 
 class MemberOnlyArticle(Resource):
     
     def get(self, id):
-        pass
+        if not session.get('user_id'):
+            return {'error': 'Unauthorized'}, 401
+
+        article = Article.query.filter(Article.id == id).first()
+
+        if not article:
+            return {'error': 'Article not found'}, 404
+
+        return ArticleSchema().dump(article), 200
 
 api.add_resource(ClearSession, '/clear', endpoint='clear')
 api.add_resource(IndexArticle, '/articles', endpoint='article_list')
